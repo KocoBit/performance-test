@@ -453,35 +453,46 @@
   });
 
   // ---------- 문제은행 ----------
+  let bankUnit = null;   // null = 아직 안 고름, 'all' = 전체
   async function initBank() {
-    selRow($('bank-round'), state.rounds.map((r) => r.round_no), state.round, (n) => `${n}회`, (n) => { state.round = n; $('bank-preview').innerHTML = ''; initBank(); });
+    selRow($('bank-round'), state.rounds.map((r) => r.round_no), state.round, (n) => `${n}회`, (n) => { state.round = n; bankUnit = null; $('bank-preview').innerHTML = ''; initBank(); });
     const [{ data: units }, { data: qs }] = await Promise.all([
       sb.from('units').select('*').eq('round_no', state.round).order('unit_no'),
       sb.from('questions').select('*').eq('round_no', state.round).order('q_no'),
     ]);
     const r = state.rounds.find((x) => x.round_no === state.round) || { question_count: 20 };
-    const k = (label, v) => el('div', { class: 'kpi' }, el('div', { class: 'v' }, v), el('div', { class: 'k' }, label));
-    $('bank-kpis').innerHTML = '';
-    const n = (units || []).length;
-    $('bank-kpis').append(k('문항 수', (qs || []).length), k('단원 수', n),
-      ...(units || []).map((u) => {
-        const cnt = (qs || []).filter((q) => q.unit_no === u.unit_no).length;
-        const need = n ? Math.ceil(r.question_count / n) : 0;
-        return k(`학습 ${u.unit_no}. ${u.title} (출제 ${Math.floor(r.question_count / n)}${r.question_count % n ? '~' + need : ''})`, cnt);
-      }));
+    const us = units || [], all = qs || [];
+    const n = us.length;
+    const per = n ? Math.floor(r.question_count / n) : 0, extra = n ? r.question_count % n : 0;
+    const perText = n ? (extra ? `학생당 ${per}~${per + 1}문항 출제` : `학생당 ${per}문항 출제`) : '';
+    if (bankUnit === null) bankUnit = us.length ? us[0].unit_no : 'all';
+    const count = (u) => all.filter((q) => q.unit_no === u).length;
+    selRow($('bank-units'), [...us.map((u) => u.unit_no), 'all'], bankUnit,
+      (u) => (u === 'all' ? `전체 (${all.length})` : `학습 ${u} (${count(u)})`), (u) => { bankUnit = u; initBank(); });
+    const cur = us.find((u) => u.unit_no === bankUnit);
+    $('bank-unit-info').textContent = !n ? '아직 문항이 없습니다. 위에서 문항 파일(docx)을 올리세요.'
+      : bankUnit === 'all' ? `${r.round_no}회 전체 ${all.length}문항 · ${n}개 학습 · ${perText}`
+      : `학습 ${cur.unit_no}. ${cur.title} · ${count(cur.unit_no)}문항 · ${perText}`;
     const body = $('bank-body'); body.innerHTML = '';
-    const unitName = (no) => { const u = (units || []).find((x) => x.unit_no === no); return u ? `학습 ${no}` : no; };
-    (qs || []).forEach((q) => {
+    const rowOf = (q) => {
       const inp = el('input', { type: 'text', class: 'group-input', value: q.exclusion_group || '', maxlength: '20' });
       inp.addEventListener('change', async () => {
         const { error } = await sb.from('questions').update({ exclusion_group: inp.value.trim() || null }).eq('id', q.id);
         toast(error ? '저장하지 못했습니다.' : `${q.q_no}번 묶음을 저장했습니다.`);
       });
-      body.append(el('tr', {}, el('td', { class: 'num' }, q.q_no), el('td', {}, unitName(q.unit_no)),
+      return el('tr', {}, el('td', { class: 'num' }, q.q_no), el('td', {}, `학습 ${q.unit_no}`),
         el('td', {}, el('div', { style: 'font-weight:600' }, q.stem),
           el('ul', { class: 'opt-list' }, q.options.map((o, i) => el('li', { class: i === q.answer ? 'ans' : '' }, `${MARKS[i]} ${o}${i === q.answer ? '  ✓' : ''}`)))),
-        el('td', { class: 'small' }, q.page || ''), el('td', {}, inp)));
-    });
+        el('td', { class: 'small' }, q.page || ''), el('td', {}, inp));
+    };
+    if (bankUnit === 'all') {
+      us.forEach((u) => {
+        body.append(el('tr', {}, el('td', { colspan: 5, style: 'background:var(--surface-2);font-weight:800' }, `학습 ${u.unit_no}. ${u.title} (${count(u.unit_no)}문항)`)));
+        all.filter((q) => q.unit_no === u.unit_no).forEach((q) => body.append(rowOf(q)));
+      });
+    } else {
+      all.filter((q) => q.unit_no === bankUnit).forEach((q) => body.append(rowOf(q)));
+    }
   }
   $('bank-file').addEventListener('change', async (ev) => {
     const file = ev.target.files[0]; ev.target.value = '';

@@ -166,7 +166,10 @@
       <label class="btn" style="margin:0">문항 파일(docx) 올리기<input type="file" id="bank-file" accept=".docx" class="hidden"></label>
     </div>
     <div id="bank-preview"></div>
-    <div class="kpis" id="bank-kpis"></div>
+    <div class="card stack">
+      <div><label>학습</label><div class="sel-row" id="bank-units"></div></div>
+      <div class="muted" id="bank-unit-info"></div>
+    </div>
     <p class="small muted">'금지 묶음'에 같은 이름(예: g1)을 넣은 문항끼리는 한 학생의 시험지에 하나만 나옵니다. 문항 내용은 원문 그대로이며 여기서 고치지 않습니다.</p>
     <div class="table-wrap"><table>
       <thead><tr><th class="num">번호</th><th>단원</th><th>발문 · 보기(초록이 정답)</th><th>쪽</th><th>금지 묶음</th></tr></thead>
@@ -246,7 +249,7 @@
   <div id="join-qr" style="width:min(46vh,420px);height:min(46vh,420px)"></div>
   <div id="join-short" style="font-size:3rem;font-weight:800;color:var(--primary);word-break:break-all"></div>
   <div id="join-url" class="mono" style="font-size:1.3rem;color:var(--text-2);word-break:break-all"></div>
-  <div id="join-pin" style="font-size:1.6rem;font-weight:800"></div>
+  <div id="join-pin" style="font-size:2.6rem;font-weight:800;letter-spacing:.04em"></div>
   <button class="btn lg" type="button" id="btn-join-close">닫기</button>
 </div>
 <div id="modal" class="modal-back hidden"><div class="modal" id="modal-body"></div></div>

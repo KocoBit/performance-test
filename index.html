@@ -13,29 +13,64 @@
   .rule-list { margin: 0; padding-left: 1.2em; }
   .rule-list li + li { margin-top: 6px; }
 
-  /* 시험 화면 */
-  .exam-shell { height: 100vh; display: grid; grid-template-rows: auto 1fr auto; }
-  .exam-top { display: flex; align-items: center; gap: 16px; padding: 12px 24px; background: var(--surface); border-bottom: 1px solid var(--line); }
+  /* 시험 화면 (CBT 방식) */
+  .exam-shell { --qs: 1; height: 100vh; height: 100dvh; display: grid; grid-template-rows: auto 1fr auto; }
+  .exam-top { display: flex; align-items: center; gap: 14px; padding: 10px 20px; background: var(--surface); border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  .who { display: flex; align-items: center; gap: 8px; font-weight: 700; }
+  .stat { font-size: .9rem; color: var(--text-2); white-space: nowrap; }
+  .stat strong { color: var(--text); font-size: 1.05rem; }
+  .stat.warn strong { color: var(--bad); }
+  .fontsize { display: flex; align-items: center; gap: 4px; }
+  .fontsize span { font-size: .85rem; color: var(--text-2); margin-right: 2px; }
+  .fontsize button { font: inherit; font-weight: 800; width: 40px; height: 36px; border-radius: 8px; border: 1px solid var(--line); background: #fff; cursor: pointer; color: var(--text); }
+  .fontsize button.on { background: var(--primary); border-color: var(--primary); color: #fff; }
   .timer { font-variant-numeric: tabular-nums; font-weight: 800; font-size: 1.35rem; padding: 4px 14px; border-radius: 10px; background: var(--surface-2); }
   .timer.low { background: var(--bad-soft); color: var(--bad); }
-  .save-state { font-size: .85rem; color: var(--text-2); min-width: 64px; text-align: right; }
-  .exam-main { display: grid; grid-template-columns: 1fr 260px; gap: 20px; padding: 20px 24px; min-height: 0; }
-  .q-card { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 28px 32px; overflow: auto; }
-  .q-no { color: var(--primary); font-weight: 800; margin-bottom: 8px; }
-  .q-stem { font-size: 1.3rem; font-weight: 700; line-height: 1.5; margin-bottom: 22px; }
+  .save-state { font-size: .82rem; color: var(--text-2); min-width: 56px; text-align: right; }
+  .exam-main { display: grid; grid-template-columns: 1fr auto; gap: 16px; padding: 16px 20px; min-height: 0; }
+  .q-card { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 24px 30px; overflow: auto; min-height: 0; }
+  .q-head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+  .q-no { color: var(--primary); font-weight: 800; font-size: calc(1.05rem * var(--qs)); }
+  .flag-btn { font: inherit; font-size: .9rem; font-weight: 700; border: 1px solid var(--line); background: #fff; border-radius: 999px; padding: 6px 14px; cursor: pointer; color: var(--text-2); min-height: 36px; }
+  .flag-btn.on { background: var(--warn-soft); border-color: #f0c98a; color: var(--warn); }
+  .q-stem { font-size: calc(1.3rem * var(--qs)); font-weight: 700; line-height: 1.55; margin-bottom: 20px; }
   .opts { display: grid; gap: 12px; }
-  .opt { display: flex; gap: 14px; align-items: flex-start; text-align: left; width: 100%; font: inherit; font-size: 1.12rem;
-         background: #fff; border: 2px solid var(--line); border-radius: 14px; padding: 16px 18px; cursor: pointer; min-height: 64px; color: var(--text); }
+  .opt { display: flex; gap: 14px; align-items: center; text-align: left; width: 100%; font: inherit; font-size: calc(1.12rem * var(--qs));
+         background: #fff; border: 2px solid var(--line); border-radius: 14px; padding: 14px 18px; cursor: pointer; min-height: 60px; color: var(--text); }
   .opt:hover { border-color: #b9c6dd; }
   .opt .mark { flex: none; width: 34px; height: 34px; border-radius: 50%; border: 2px solid #b9c3d0; display: flex; align-items: center; justify-content: center; font-weight: 800; color: var(--text-2); }
   .opt.sel { border-color: var(--primary); background: var(--primary-soft); }
   .opt.sel .mark { background: var(--primary); border-color: var(--primary); color: #fff; }
-  .side { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 18px; overflow: auto; }
-  .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
-  .grid button { font: inherit; font-weight: 700; height: 48px; border-radius: 10px; border: 2px solid var(--line); background: #fff; cursor: pointer; color: var(--text); }
-  .grid button.done { background: var(--primary-soft); border-color: #b8c9f3; color: var(--primary); }
-  .grid button.cur { border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary) inset; }
-  .exam-bottom { display: flex; gap: 12px; padding: 12px 24px; background: var(--surface); border-top: 1px solid var(--line); }
+
+  /* 답안 표기란: 화면 크기에 맞춰 1줄·2줄·번호판으로 자동 배치 */
+  .omr { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 12px; display: flex; flex-direction: column; min-height: 0; }
+  .omr h3 { font-size: .95rem; margin: 2px 4px 8px; }
+  .omr-body { flex: 1; min-height: 0; display: grid; gap: 4px 14px; align-content: start; overflow: auto; }
+  .omr.c1 .omr-body { grid-template-columns: auto; grid-auto-flow: row; }
+  .omr.c2 .omr-body { grid-template-columns: auto auto; grid-template-rows: repeat(10, auto); grid-auto-flow: column; }
+  .omr-row { display: flex; align-items: center; gap: 4px; border-radius: 10px; padding: 0 4px; height: var(--row-h, 44px); }
+  .omr-row.cur { background: var(--primary-soft); }
+  .omr-no { font: inherit; font-weight: 800; width: 44px; height: calc(var(--row-h, 44px) - 4px); border: 0; background: transparent; cursor: pointer; color: var(--text); display: flex; align-items: center; justify-content: center; gap: 2px; border-radius: 8px; }
+  .omr-no .fl { color: var(--warn); font-size: .8rem; }
+  .bub { font: inherit; font-weight: 700; width: var(--bub, 38px); height: var(--bub, 38px); border-radius: 50%; border: 2px solid #b9c3d0; background: #fff; cursor: pointer; color: var(--text-2); padding: 0; font-size: .95rem; }
+  .bub.on { background: #1f2937; border-color: #1f2937; color: #fff; }
+  .omr.compact .omr-body { grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .omr.compact .bub { display: none; }
+  .omr.compact .omr-row { padding: 0; height: 48px; }
+  .omr.compact .omr-no { width: 100%; height: 48px; border: 2px solid var(--line); background: #fff; }
+  .omr.compact .omr-row.done .omr-no { background: var(--primary-soft); border-color: #b8c9f3; color: var(--primary); }
+  .omr.compact .omr-row.cur .omr-no { border-color: var(--primary); }
+  .omr.compact .omr-legend { display: none; }
+  .omr-legend { font-size: .78rem; color: var(--text-2); margin: 8px 4px 0; }
+  .exam-bottom { display: flex; gap: 10px; padding: 10px 20px; background: var(--surface); border-top: 1px solid var(--line); flex-wrap: wrap; }
+
+  /* 제출 전 점검 */
+  .check-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin: 12px 0; }
+  .check-grid button { font: inherit; font-weight: 700; height: 52px; border-radius: 10px; border: 2px solid var(--line); background: #fff; cursor: pointer; color: var(--text); display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.1; }
+  .check-grid button small { font-size: .72rem; font-weight: 600; }
+  .check-grid button.done { background: var(--primary-soft); border-color: #b8c9f3; color: var(--primary); }
+  .check-grid button.empty { background: var(--bad-soft); border-color: #efc4c4; color: var(--bad); }
+  .check-grid button.flag { box-shadow: 0 0 0 3px #f0c98a inset; }
 
   /* 워터마크: 학번 */
   .watermark { position: fixed; inset: 0; pointer-events: none; z-index: 40; opacity: .035; overflow: hidden;
@@ -53,10 +88,10 @@
   .review-opt.answer { background: var(--good-soft); color: #0f5534; font-weight: 700; }
   .review-opt.mine-wrong { background: var(--bad-soft); color: #8a1f1f; font-weight: 700; }
 
-  @media (max-width: 860px) {
-    .exam-main { grid-template-columns: 1fr; }
-    .side { display: none; }
-    .q-card { padding: 20px; }
+  @media (max-width: 760px) {
+    .exam-main { grid-template-columns: 1fr; grid-template-rows: 1fr auto; }
+    .omr { max-height: 34vh; }
+    .q-card { padding: 18px; }
   }
   @media print { body * { display: none !important; } }
 </style>
@@ -138,30 +173,37 @@
 <!-- 3. 시험 -->
 <section id="scr-exam" class="exam-shell hidden">
   <header class="exam-top">
-    <div class="brand"><span class="brand-dot"></span><span id="e-title"></span></div>
-    <span class="badge" id="e-sno"></span>
+    <div class="who"><span class="brand-dot"></span><span id="e-title"></span><span class="badge primary" id="e-sno"></span></div>
     <div class="spacer"></div>
+    <span class="stat">전체 <strong id="e-total">20</strong></span>
+    <span class="stat warn" id="e-left-wrap">안 푼 문제 <strong id="e-left">20</strong></span>
+    <div class="fontsize" role="group" aria-label="글자 크기"><span>글자 크기</span>
+      <button type="button" data-fs="1" class="on">가</button><button type="button" data-fs="1.15">가</button><button type="button" data-fs="1.3">가</button>
+    </div>
     <span class="save-state" id="e-save"></span>
-    <span class="muted small" id="e-progress"></span>
     <span class="timer" id="e-timer" aria-live="off">--:--</span>
   </header>
   <main class="exam-main">
-    <article class="q-card">
-      <div class="q-no" id="e-qno"></div>
+    <article class="q-card" id="q-card">
+      <div class="q-head">
+        <div class="q-no" id="e-qno"></div>
+        <button type="button" class="flag-btn" id="btn-flag">☆ 다시 볼 문제로 표시</button>
+      </div>
       <div class="q-stem" id="e-stem"></div>
       <div class="opts" id="e-opts"></div>
     </article>
-    <aside class="side">
-      <h3>문항 번호</h3>
-      <div class="grid" id="e-grid"></div>
-      <p class="small muted" style="margin-top:12px">파란 번호는 답을 고른 문항입니다.</p>
+    <aside class="omr c1" id="omr">
+      <h3>답안 표기란</h3>
+      <div class="omr-body" id="omr-body"></div>
+      <div class="omr-legend" id="omr-legend">번호를 누르면 그 문제로 갑니다. ⚑는 다시 볼 문제입니다.</div>
     </aside>
   </main>
   <footer class="exam-bottom">
-    <button id="btn-prev" class="btn lg" type="button">← 이전</button>
-    <button id="btn-next" class="btn lg" type="button">다음 →</button>
+    <button id="btn-prev" class="btn lg" type="button">← 이전 문제</button>
+    <button id="btn-next" class="btn lg" type="button">다음 문제 →</button>
+    <button id="btn-empty" class="btn lg" type="button">안 푼 문제로</button>
     <div class="spacer"></div>
-    <button id="btn-submit" class="btn primary lg" type="button">제출하기</button>
+    <button id="btn-submit" class="btn primary lg" type="button">답안 제출</button>
   </footer>
   <div class="watermark" id="watermark" aria-hidden="true"></div>
 </section>

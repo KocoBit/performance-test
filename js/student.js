@@ -142,6 +142,7 @@
     buildGrid();
     render();
     show('scr-exam');
+    requestAnimationFrame(() => { layoutOmr(); render(); });
     if (inLockdown()) push('lockdown', null, { secure: true });
     clearInterval(tickTimer); tickTimer = setInterval(tick, 250);
     clearInterval(beatTimer); beatTimer = setInterval(heartbeat, 5000);
@@ -163,20 +164,75 @@
     $('watermark').textContent = Array.from({ length: 16 }, () => line).join('\n');
   }
 
+  // ---------- 다시 볼 문제·글자 크기 (이 기기에만 저장) ----------
+  let flags = new Set();
+  const flagKey = () => 'pt_flags_' + (session && session.token ? session.token.slice(0, 12) : '');
+  function loadFlags() { try { flags = new Set(JSON.parse(localStorage.getItem(flagKey()) || '[]')); } catch (e) { flags = new Set(); } }
+  function saveFlags() { try { localStorage.setItem(flagKey(), JSON.stringify([...flags])); } catch (e) {} }
+  function setFont(v) {
+    $('scr-exam').style.setProperty('--qs', v);
+    document.querySelectorAll('.fontsize button').forEach((b) => b.classList.toggle('on', b.dataset.fs === String(v)));
+    try { localStorage.setItem('pt_fs', String(v)); } catch (e) {}
+  }
+  document.querySelectorAll('.fontsize button').forEach((b) => b.addEventListener('click', () => setFont(b.dataset.fs)));
+  try { const f = localStorage.getItem('pt_fs'); if (f) setFont(f); } catch (e) {}
+
+  const answered = (i) => items[i] && items[i].mine !== null && items[i].mine !== undefined;
+
+  // ---------- 답안 표기란: 화면 크기에 맞춰 1줄 · 2줄 · 번호판 ----------
+  const MIN_ROW = 44;    // 손가락으로 누르기 좋은 줄 높이
+  function layoutOmr() {
+    const omr = $('omr');
+    if (!items.length || $('scr-exam').classList.contains('hidden')) return;
+    const nOpt = Math.max(...items.map((x) => x.options.length));
+    const main = document.querySelector('.exam-main');
+    const avail = main.clientHeight - 32 /* main 여백 */ - 24 /* 판 여백 */ - 30 /* 제목 */ - 28 /* 안내 */;
+    const n = items.length;
+    const narrow = window.innerWidth <= 760;
+    let mode, rowH;
+    if (narrow) { mode = 'compact'; }
+    else if (avail / n >= MIN_ROW) { mode = 'c1'; rowH = Math.min(54, Math.floor(avail / n)); }
+    else if (avail / Math.ceil(n / 2) >= MIN_ROW - 4 && window.innerWidth >= 900) { mode = 'c2'; rowH = Math.min(54, Math.floor(avail / Math.ceil(n / 2))); }
+    else { mode = 'compact'; }
+    omr.className = 'omr ' + mode;
+    if (rowH) {
+      omr.style.setProperty('--row-h', rowH + 'px');
+      omr.style.setProperty('--bub', Math.max(32, Math.min(42, rowH - 6)) + 'px');
+    }
+    const body = $('omr-body');
+    if (mode === 'c2') body.style.gridTemplateRows = `repeat(${Math.ceil(n / 2)}, auto)`;
+    else body.style.gridTemplateRows = '';
+    omr.dataset.mode = mode; omr.dataset.opts = nOpt;
+  }
+  window.addEventListener('resize', () => layoutOmr());
+
   function buildGrid() {
-    const g = $('e-grid'); g.innerHTML = '';
-    items.forEach((_, i) => {
-      const b = document.createElement('button');
-      b.type = 'button'; b.textContent = i + 1;
-      b.addEventListener('click', () => go(i));
-      g.appendChild(b);
+    loadFlags();
+    const body = $('omr-body'); body.innerHTML = '';
+    items.forEach((it, i) => {
+      const row = document.createElement('div'); row.className = 'omr-row';
+      const no = document.createElement('button'); no.type = 'button'; no.className = 'omr-no';
+      no.setAttribute('aria-label', `${i + 1}번 문제로 가기`);
+      no.addEventListener('click', () => go(i));
+      row.appendChild(no);
+      it.options.forEach((_, k) => {
+        const b = document.createElement('button'); b.type = 'button'; b.className = 'bub'; b.textContent = k + 1;
+        b.setAttribute('aria-label', `${i + 1}번 ${k + 1}번 보기`);
+        b.addEventListener('click', () => { if (i !== cur) go(i); choose(k, i); });
+        row.appendChild(b);
+      });
+      body.appendChild(row);
     });
+    layoutOmr();
   }
 
   function render() {
     const it = items[cur];
-    $('e-qno').textContent = `${cur + 1} / ${items.length}`;
+    $('e-qno').textContent = `${cur + 1}번 / ${items.length}문항`;
     $('e-stem').textContent = it.stem;
+    const f = flags.has(cur);
+    $('btn-flag').classList.toggle('on', f);
+    $('btn-flag').textContent = f ? '⚑ 다시 볼 문제 (해제하려면 누르기)' : '☆ 다시 볼 문제로 표시';
     const box = $('e-opts'); box.innerHTML = '';
     it.options.forEach((text, i) => {
       const b = document.createElement('button');
@@ -187,27 +243,43 @@
       b.addEventListener('click', () => choose(i));
       box.appendChild(b);
     });
-    [...$('e-grid').children].forEach((b, i) => {
-      b.classList.toggle('done', items[i].mine !== null && items[i].mine !== undefined);
-      b.classList.toggle('cur', i === cur);
+    [...$('omr-body').children].forEach((row, i) => {
+      row.classList.toggle('cur', i === cur);
+      row.classList.toggle('done', answered(i));
+      const no = row.firstChild;
+      no.innerHTML = '';
+      no.append(String(i + 1));
+      if (flags.has(i)) { const fl = document.createElement('span'); fl.className = 'fl'; fl.textContent = '⚑'; no.append(fl); }
+      [...row.querySelectorAll('.bub')].forEach((b, k) => b.classList.toggle('on', items[i].mine === k));
     });
-    const answered = items.filter((x) => x.mine !== null && x.mine !== undefined).length;
-    $('e-progress').textContent = `${answered}/${items.length} 답함`;
+    const left = items.filter((_, i) => !answered(i)).length;
+    $('e-total').textContent = items.length;
+    $('e-left').textContent = left;
+    $('e-left-wrap').classList.toggle('warn', left > 0);
     $('btn-prev').disabled = cur === 0;
     $('btn-next').disabled = cur === items.length - 1;
+    $('btn-empty').disabled = left === 0;
   }
 
   function go(i) {
     if (i < 0 || i >= items.length || i === cur) return;
     cur = i; render();
+    $('q-card').scrollTop = 0;
     push('view', cur);
   }
   $('btn-prev').addEventListener('click', () => go(cur - 1));
   $('btn-next').addEventListener('click', () => go(cur + 1));
+  $('btn-empty').addEventListener('click', () => {
+    for (let s = 1; s <= items.length; s++) { const i = (cur + s) % items.length; if (!answered(i)) { go(i); return; } }
+  });
+  $('btn-flag').addEventListener('click', () => {
+    if (flags.has(cur)) flags.delete(cur); else flags.add(cur);
+    saveFlags(); render();
+  });
 
-  async function choose(i) {
+  async function choose(i, at) {
     if (!examActive) return;
-    const idx = cur;
+    const idx = at === undefined ? cur : at;
     const prev = items[idx].mine;
     const next = prev === i ? null : i;   // 같은 보기를 다시 누르면 선택 취소
     items[idx].mine = next; render();
@@ -316,14 +388,36 @@
     body.appendChild(row);
     $('modal').classList.remove('hidden');
   }
+  // 제출 전 점검(안 푼 문제·다시 볼 문제) → 한 번 더 확인 → 최종 제출
   $('btn-submit').addEventListener('click', () => {
-    const empty = items.map((x, i) => (x.mine === null || x.mine === undefined ? i + 1 : null)).filter(Boolean);
-    const warn = empty.length
-      ? `<div class="notice warn" style="margin-top:12px">아직 답하지 않은 문항: <strong>${empty.join(', ')}번</strong> (${empty.length}개)</div>` : '';
-    modal(`<h2>제출할까요?</h2><p>제출하면 답을 바꿀 수 없습니다.</p>${warn}`, [
-      { text: '계속 풀기' },
-      { text: '제출하기', cls: 'primary', onClick: () => submit(false) },
-    ]);
+    const empty = items.map((_, i) => (answered(i) ? null : i + 1)).filter(Boolean);
+    const flagged = [...flags].sort((a, b) => a - b).map((i) => i + 1);
+    const body = $('modal-body'); body.innerHTML = '';
+    const h = document.createElement('h2'); h.textContent = '답안 제출 전 점검';
+    const p = document.createElement('p');
+    p.innerHTML = `안 푼 문제 <strong style="color:var(--bad)">${empty.length}개</strong> · 다시 볼 문제 <strong style="color:var(--warn)">${flagged.length}개</strong><br><span class="small muted">번호를 누르면 그 문제로 돌아갑니다.</span>`;
+    const grid = document.createElement('div'); grid.className = 'check-grid';
+    items.forEach((_, i) => {
+      const b = document.createElement('button'); b.type = 'button';
+      b.className = (answered(i) ? 'done' : 'empty') + (flags.has(i) ? ' flag' : '');
+      b.innerHTML = `${i + 1}<small>${answered(i) ? MARKS[items[i].mine] : '안 품'}${flags.has(i) ? ' ⚑' : ''}</small>`;
+      b.addEventListener('click', () => { $('modal').classList.add('hidden'); go(i); });
+      grid.appendChild(b);
+    });
+    const row = document.createElement('div'); row.className = 'row'; row.style.marginTop = '8px';
+    const back = document.createElement('button'); back.type = 'button'; back.className = 'btn lg'; back.textContent = '계속 풀기';
+    back.addEventListener('click', () => $('modal').classList.add('hidden'));
+    const go2 = document.createElement('button'); go2.type = 'button'; go2.className = 'btn primary lg'; go2.textContent = '답안 제출';
+    go2.addEventListener('click', () => {
+      modal(`<h2>최종 제출할까요?</h2><p><strong>제출하면 답을 고칠 수 없습니다.</strong></p>${empty.length ? `<div class="notice warn">안 푼 문제 ${empty.length}개는 틀린 것으로 처리됩니다.</div>` : ''}`, [
+        { text: '취소' },
+        { text: '최종 제출', cls: 'primary', onClick: () => submit(false) },
+      ]);
+    });
+    row.append(back, document.createElement('div'), go2);
+    row.children[1].className = 'spacer';
+    body.append(h, p, grid, row);
+    $('modal').classList.remove('hidden');
   });
 
   async function submit(auto) {
@@ -340,7 +434,8 @@
     examActive = false;
     clearInterval(tickTimer); clearInterval(beatTimer);
     $('cover').classList.add('hidden'); $('modal').classList.add('hidden');
-    clearSession(); items = []; cur = 0; queue = [];
+    try { localStorage.removeItem(flagKey()); } catch (e) {}
+    clearSession(); items = []; cur = 0; queue = []; flags = new Set();
     try { if (document.fullscreenElement) document.exitFullscreen(); } catch (e) {}
     $('done-msg').textContent = reason === 'closed'
       ? '시험이 마감되어 그때까지 고른 답으로 제출되었습니다. 점수는 마감 뒤 \'결과 확인\'에서 볼 수 있습니다.'
