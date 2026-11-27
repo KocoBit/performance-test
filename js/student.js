@@ -121,7 +121,16 @@
   async function requestFs() {
     const el = document.documentElement;
     try { if (!document.fullscreenElement && el.requestFullscreen) await el.requestFullscreen({ navigationUI: 'hide' }); } catch (e) {}
+    lockKeys();
   }
+  // 전체 화면에서 Alt+Tab·윈도우 키·Esc(짧게) 막기 (크롬·엣지). 지원하지 않는 브라우저는 그냥 넘어감
+  let keysLocked = false;
+  async function lockKeys() {
+    if (!document.fullscreenElement || !navigator.keyboard || !navigator.keyboard.lock) return;
+    try { await navigator.keyboard.lock(); if (!keysLocked) { keysLocked = true; push('lockdown', null, { keyboard: true }); } } catch (e) {}
+  }
+  function unlockKeys() { try { if (navigator.keyboard && navigator.keyboard.unlock) navigator.keyboard.unlock(); } catch (e) {} keysLocked = false; }
+  const fsOk = () => !!document.fullscreenElement || !document.fullscreenEnabled;
 
   async function startExam(resume) {
     await requestFs();   // 시작 버튼을 누른 순간이어야 전체 화면이 허용된다
@@ -318,7 +327,9 @@
 
   // 화면 이탈(다른 탭·창·앱)
   function leave(kind) {
-    if (!examActive || awaySince !== null) return;
+    if (!examActive) return;
+    $('cover').classList.remove('hidden');   // 다른 창에 초점이 가면 문제를 가린다(분할 화면·알림 창 포함)
+    if (awaySince !== null) return;
     awaySince = Date.now();
     push(kind, cur);
     heartbeat();
@@ -327,18 +338,19 @@
     if (!examActive || awaySince === null) return;
     const seconds = Math.round((Date.now() - awaySince) / 1000);
     awaySince = null;
+    if (fsOk()) $('cover').classList.add('hidden');
     push('return', cur, { seconds });
     heartbeat();
     toast(`화면 이탈 ${seconds}초가 기록되었습니다.`);
   }
   document.addEventListener('visibilitychange', () => { document.hidden ? leave('leave') : comeBack(); });
   window.addEventListener('blur', () => leave('leave'));
-  window.addEventListener('focus', () => { if (!document.hidden && (document.fullscreenElement || !document.fullscreenEnabled)) comeBack(); });
+  window.addEventListener('focus', () => { if (!document.hidden && fsOk()) comeBack(); });
 
   // 전체 화면 벗어남
   document.addEventListener('fullscreenchange', () => {
     if (!examActive) return;
-    if (document.fullscreenElement) { push('fullscreen_enter', cur); $('cover').classList.add('hidden'); comeBack(); }
+    if (document.fullscreenElement) { push('fullscreen_enter', cur); lockKeys(); if (document.hasFocus()) { $('cover').classList.add('hidden'); comeBack(); } }
     else { push('fullscreen_exit', cur); $('cover').classList.remove('hidden'); if (awaySince === null) awaySince = Date.now(); heartbeat(); }
   });
   $('btn-back').addEventListener('click', async () => {
@@ -436,6 +448,7 @@
     $('cover').classList.add('hidden'); $('modal').classList.add('hidden');
     try { localStorage.removeItem(flagKey()); } catch (e) {}
     clearSession(); items = []; cur = 0; queue = []; flags = new Set();
+    unlockKeys();
     try { if (document.fullscreenElement) document.exitFullscreen(); } catch (e) {}
     $('done-msg').textContent = reason === 'closed'
       ? '시험이 마감되어 그때까지 고른 답으로 제출되었습니다. 점수는 마감 뒤 \'결과 확인\'에서 볼 수 있습니다.'
@@ -506,12 +519,17 @@
   }
 
   // ---------- 처음 ----------
+  // 잠금 모드(윈도우 테스트 응시)는 교사가 설정에서 켠 경우에만, 윈도우 기기에서만 안내
   if (inLockdown()) {
     $('lock-ok').classList.remove('hidden');
     try { window.SecureBrowser.security.lockDown(true, () => {}, () => {}); } catch (e) {}
   } else {
-    $('lock-banner').classList.remove('hidden');
-    $('lock-link').href = lockdownLink();
+    rpc('student_config', {}).then((c) => {
+      if (c && c.use_lockdown && /Windows/i.test(navigator.userAgent)) {
+        $('lock-banner').classList.remove('hidden');
+        $('lock-link').href = lockdownLink();
+      }
+    });
   }
   try { session = JSON.parse(sessionStorage.getItem(STORE) || 'null'); } catch (e) { session = null; }
   if (session && session.token) {

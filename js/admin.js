@@ -316,7 +316,7 @@
     enter: '입장', start: '시작', view: '문항 이동', answer: '답 선택', leave: '화면 이탈', return: '복귀',
     fullscreen_exit: '전체 화면 벗어남', fullscreen_enter: '전체 화면 복귀', copy: '복사 시도', paste: '붙여넣기 시도',
     contextmenu: '우클릭 시도', print: '인쇄 시도', key_block: '단축키 시도', device_conflict: '다른 기기 접속 시도',
-    lockdown: '잠금 모드 확인', submit: '제출', resize: '창 크기 변경',
+    lockdown: '잠금 확인', submit: '제출', resize: '창 크기 변경',
   };
   async function showDetail(attemptId, sno) {
     const r = await rpc('admin_attempt_detail', { p_attempt: attemptId });
@@ -340,7 +340,7 @@
     const evTable = el('table', {}, el('thead', {}, el('tr', {}, el('th', {}, '시각'), el('th', {}, '기록'), el('th', { class: 'num' }, '문항'), el('th', {}, '내용'))),
       el('tbody', {}, evs.filter((e) => e.type !== 'view').map((e) => el('tr', { class: ['leave', 'fullscreen_exit', 'copy', 'paste', 'contextmenu', 'print', 'key_block', 'device_conflict'].includes(e.type) ? 'alert' : '' },
         el('td', {}, fmtTime(e.at)), el('td', {}, EVT[e.type] || e.type), el('td', { class: 'num' }, e.item === null ? '' : e.item + 1),
-        el('td', { class: 'small' }, e.type === 'return' && e.detail ? `${e.detail.seconds}초 동안 벗어남` : (e.detail && e.detail.key) || (e.detail && e.detail.reason) || (e.type === 'enter' && e.detail ? (e.detail.lockdown ? '잠금 모드' : '일반') + (e.detail.ip ? ` · ${e.detail.ip}` : '') : ''))))));
+        el('td', { class: 'small' }, e.type === 'return' && e.detail ? `${e.detail.seconds}초 동안 벗어남` : (e.detail && e.detail.key) || (e.detail && e.detail.reason) || (e.type === 'lockdown' && e.detail ? (e.detail.keyboard ? '키보드 잠금 켜짐(Alt+Tab·윈도우 키 막힘)' : '테스트 응시 잠금 모드') : '') || (e.type === 'enter' && e.detail ? (e.detail.lockdown ? '잠금 모드' : '일반') + (e.detail.ip ? ` · ${e.detail.ip}` : '') : ''))))));
     modal(`${sno} 응시 상세`, [
       el('h3', {}, '문항별'), el('div', { class: 'table-wrap' }, itemTable),
       el('h3', { style: 'margin-top:16px' }, '기록(시간 순)'), el('div', { class: 'table-wrap', style: 'max-height:320px;overflow:auto' }, evTable),
@@ -635,7 +635,9 @@
       box.append(el('p', { class: 'small muted' }, `점수 = 정답 수 × ${r.points_per_q}점 + 기본점 ${r.base_score}점`));
     });
     const { data: st } = await sb.from('settings').select('*').eq('id', 1).single();
+    $('set-use-lockdown').checked = !!(st && st.use_lockdown);
     $('set-lockdown').checked = !!(st && st.require_lockdown);
+    $('set-lockdown').disabled = !$('set-use-lockdown').checked;
     $('set-short').value = (st && st.short_url) || '';
     $('set-ip').value = st ? (st.allowed_ip_prefixes || []).join(', ') : '';
     const { data: ev } = await sb.from('events').select('detail,at').eq('type', 'enter').order('at', { ascending: false }).limit(30);
@@ -643,6 +645,10 @@
     (ev || []).forEach((e) => { const ip = e.detail && e.detail.ip; if (ip) ips[ip] = (ips[ip] || 0) + 1; });
     $('recent-ips').textContent = Object.keys(ips).length ? '최근 입장 주소: ' + Object.entries(ips).map(([ip, n]) => `${ip} (${n}회)`).join(', ') : '최근 입장 기록이 없습니다.';
   }
+  $('set-use-lockdown').addEventListener('change', () => {
+    $('set-lockdown').disabled = !$('set-use-lockdown').checked;
+    if (!$('set-use-lockdown').checked) $('set-lockdown').checked = false;
+  });
   $('btn-save-short').addEventListener('click', async () => {
     let v = $('set-short').value.trim();
     if (v && !/^https?:\/\//.test(v)) v = 'https://' + v;
@@ -652,7 +658,8 @@
   $('btn-save-settings').addEventListener('click', async () => {
     const prefixes = $('set-ip').value.split(',').map((s) => s.trim()).filter(Boolean);
     if ($('set-lockdown').checked && !(await confirmBox('잠금 모드 필수', '학교 서피스 고에서 잠금 모드가 실제로 열리고, 응시 화면에 "잠금 모드에서 응시 중"이 보이는 것을 확인하셨나요? 확인하지 않고 켜면 아무도 입장하지 못할 수 있습니다.', '켜기', true))) return;
-    const { error } = await sb.from('settings').update({ require_lockdown: $('set-lockdown').checked, allowed_ip_prefixes: prefixes }).eq('id', 1);
+    const useLock = $('set-use-lockdown').checked;
+    const { error } = await sb.from('settings').update({ use_lockdown: useLock, require_lockdown: useLock && $('set-lockdown').checked, allowed_ip_prefixes: prefixes }).eq('id', 1);
     toast(error ? '저장하지 못했습니다.' : '저장했습니다.');
   });
 
