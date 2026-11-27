@@ -5,7 +5,7 @@
   const MARKS = ['①', '②', '③', '④', '⑤'];
   const CLASSES_FALLBACK = 8;
 
-  const state = { view: 'run', round: 1, cls: 1, rounds: [], classCount: CLASSES_FALLBACK, monitorTimer: null, results: null, stats: null };
+  const state = { view: 'run', round: 1, cls: null, rounds: [], classCount: CLASSES_FALLBACK, monitorTimer: null, results: null, stats: null, myClasses: [], lastPin: null };
 
   // ---------- 공통 ----------
   function el(tag, attrs, ...kids) {
@@ -97,13 +97,17 @@
   async function boot() {
     const { data } = await sb.auth.getSession();
     if (!data.session) { $('scr-login').classList.remove('hidden'); $('app').classList.add('hidden'); return; }
-    const ok = await rpc('claim_admin');
-    if (!ok) {
+    const me = await rpc('claim_admin');
+    if (!me || me.status !== 'approved') {
       $('scr-login').classList.remove('hidden');
-      loginMsg('이 계정은 관리자가 아닙니다. 처음 만든 교사 계정으로 로그인하세요.');
+      loginMsg(me && me.status === 'pending'
+        ? '승인 대기 중입니다. 함께 쓰는 선생님께 \'설정 → 교사\'에서 승인해 달라고 요청하세요.'
+        : '이 계정으로는 들어올 수 없습니다.', 'warn');
       await sb.auth.signOut();
       return;
     }
+    state.myClasses = me.classes || [];
+    if (state.cls === null) state.cls = state.myClasses[0] || 1;
     $('who').textContent = data.session.user.email;
     $('scr-login').classList.add('hidden'); $('app').classList.remove('hidden');
     await loadBasics();
@@ -140,7 +144,8 @@
     openSessions = (data || []).filter((s) => s.is_open);
     const isOpen = (r, c) => openSessions.some((s) => s.round_no === r && s.class_no === c);
     selRow($('run-round'), state.rounds.map((r) => r.round_no), state.round, (n) => `${n}회`, (n) => { state.round = n; initRun(); });
-    selRow($('run-class'), classList(), state.cls, (c) => `${c}반`, (c) => { state.cls = c; initRun(); },
+    const ordered = [...state.myClasses.filter((c) => c <= state.classCount).sort((a, b) => a - b), ...classList().filter((c) => !state.myClasses.includes(c))];
+    selRow($('run-class'), ordered, state.cls, (c) => (state.myClasses.includes(c) ? `${c}반 ★` : `${c}반`), (c) => { state.cls = c; initRun(); },
       (c) => (isOpen(state.round, c) ? el('span', { class: 'dot', title: '열림' }) : null));
     const base = location.origin + location.pathname.replace(/admin\.html$/, '');
     const lockUrl = 'ms-edu-secureassessment:' + base + 'index.html!enforceLockdown';
@@ -159,6 +164,7 @@
   function renderSessionCard(sess) {
     const card = $('session-card'); card.innerHTML = '';
     const title = el('h3', {}, `${roundTitle(state.round)} · ${state.cls}반`);
+    state.lastPin = sess && sess.is_open ? sess.pin : null;
     if (sess && sess.is_open) {
       card.append(title,
         el('div', { class: 'badge good' }, '열림 · 이 반 학생만 입장 가능'),
@@ -228,6 +234,7 @@
 
   function actionButtons(s) {
     const box = el('div', { class: 'row', style: 'gap:6px;flex-wrap:nowrap' });
+    box.append(el('button', { class: 'btn sm', type: 'button', onclick: () => showCode(s.student_no) }, '코드'));
     if (s.attempt_id) box.append(el('button', { class: 'btn sm', type: 'button', onclick: () => showDetail(s.attempt_id, s.student_no) }, '상세'));
     if (s.status === 'in_progress' || (s.status === 'submitted' && s.submit_reason !== 'manual')) {
       box.append(el('button', { class: 'btn sm', type: 'button', onclick: () => adjustTime(s) }, '시간'));
@@ -241,6 +248,31 @@
     if (s.attempt_id) box.append(el('button', { class: 'btn sm danger', type: 'button', onclick: () => resetAttempt(state.round, s.student_no, refreshMonitor) }, '재응시'));
     return box;
   }
+
+  async function showCode(sno) {
+    const { data } = await sb.from('students').select('code').eq('student_no', sno).single();
+    if (!data) { toast('코드를 불러오지 못했습니다.'); return; }
+    modal(`${sno} 개인 코드`, [
+      el('div', { class: 'pin-box', style: 'font-size:3rem;margin:12px 0' }, data.code),
+      el('p', { class: 'small muted' }, '학생에게만 보여 주세요. 코드가 새어 나간 것 같으면 \'학생·코드\' 화면에서 재발급하세요.'),
+    ]);
+  }
+
+  // 학생 접속 안내(프로젝터용)
+  async function showJoin() {
+    const base = location.origin + location.pathname.replace(/admin\.html$/, '');
+    const { data: st } = await sb.from('settings').select('short_url').eq('id', 1).single();
+    const short = st && st.short_url ? st.short_url.replace(/^https?:\/\//, '') : '';
+    try { const qr = qrcode(0, 'M'); qr.addData(st && st.short_url ? st.short_url : base); qr.make(); $('join-qr').innerHTML = qr.createSvgTag({ scalable: true, margin: 1 }); } catch (e) { $('join-qr').textContent = ''; }
+    $('join-short').textContent = short;
+    $('join-url').textContent = short ? base : base.replace(/^https?:\/\//, '');
+    $('join-url').style.fontSize = short ? '1.1rem' : '2rem';
+    $('join-pin').textContent = state.lastPin ? `${state.cls}반 입장 암호  ${state.lastPin}` : '';
+    $('join').classList.remove('hidden');
+    try { await document.documentElement.requestFullscreen(); } catch (e) {}
+  }
+  $('btn-join-info').addEventListener('click', showJoin);
+  $('btn-join-close').addEventListener('click', () => { $('join').classList.add('hidden'); try { if (document.fullscreenElement) document.exitFullscreen(); } catch (e) {} });
 
   function adjustTime(s) {
     const kind = el('select', {},
@@ -544,8 +576,37 @@
   $('btn-print-all').addEventListener('click', () => printCodes(classList()));
 
   // ---------- 설정 ----------
+  async function renderTeachers() {
+    const list = (await rpc('admin_teachers')) || [];
+    const body = $('teacher-body'); body.innerHTML = '';
+    list.forEach((t) => body.append(el('tr', { class: t.approved ? '' : 'alert' },
+      el('td', {}, t.email || '(이메일 없음)', t.me ? el('span', { class: 'badge primary', style: 'margin-left:6px' }, '나') : null),
+      el('td', {}, t.approved ? el('span', { class: 'badge good' }, '승인됨') : el('span', { class: 'badge warn' }, '승인 대기')),
+      el('td', {}, (t.classes || []).length ? t.classes.map((c) => `${c}반`).join(', ') : ''),
+      el('td', {}, el('div', { class: 'row', style: 'gap:6px' },
+        !t.approved ? el('button', { class: 'btn sm good', type: 'button', onclick: async () => {
+          if (!(await confirmBox('교사 승인', `${t.email}을(를) 승인하면 모든 반의 운영·결과·문제은행·학생 코드를 같은 권한으로 쓸 수 있습니다. 함께 가르치는 선생님이 맞나요?`, '승인'))) return;
+          if (await rpc('admin_set_teacher', { p_user: t.user_id, p_approved: true })) { toast('승인했습니다.'); renderTeachers(); }
+        } }, '승인') : null,
+        !t.me ? el('button', { class: 'btn sm danger', type: 'button', onclick: async () => {
+          if (!(await confirmBox(t.approved ? '교사 해제' : '가입 거절', `${t.email}을(를) 목록에서 지웁니다. 이 계정은 더 이상 관리 화면에 들어올 수 없습니다.`, '지우기', true))) return;
+          if (await rpc('admin_set_teacher', { p_user: t.user_id, p_approved: false })) { toast('지웠습니다.'); renderTeachers(); }
+        } }, t.approved ? '해제' : '거절') : null)))));
+    const box = $('my-classes'); box.innerHTML = '';
+    classList().forEach((c) => {
+      const b = el('button', { type: 'button', class: state.myClasses.includes(c) ? 'on' : '' }, `${c}반`);
+      b.addEventListener('click', async () => {
+        const next = state.myClasses.includes(c) ? state.myClasses.filter((x) => x !== c) : [...state.myClasses, c].sort((a, x) => a - x);
+        if (await rpc('admin_set_my_classes', { p_classes: next })) { state.myClasses = next; renderTeachers(); }
+      });
+      box.append(b);
+    });
+  }
+
   async function initSettings() {
     await loadBasics();
+    renderTeachers();
+    $('student-url').textContent = '학생용 주소: ' + location.origin + location.pathname.replace(/admin\.html$/, '');
     const box = $('set-rounds'); box.innerHTML = '';
     state.rounds.forEach((r) => {
       const title = el('input', { type: 'text', value: r.title });
@@ -564,12 +625,19 @@
     });
     const { data: st } = await sb.from('settings').select('*').eq('id', 1).single();
     $('set-lockdown').checked = !!(st && st.require_lockdown);
+    $('set-short').value = (st && st.short_url) || '';
     $('set-ip').value = st ? (st.allowed_ip_prefixes || []).join(', ') : '';
     const { data: ev } = await sb.from('events').select('detail,at').eq('type', 'enter').order('at', { ascending: false }).limit(30);
     const ips = {};
     (ev || []).forEach((e) => { const ip = e.detail && e.detail.ip; if (ip) ips[ip] = (ips[ip] || 0) + 1; });
     $('recent-ips').textContent = Object.keys(ips).length ? '최근 입장 주소: ' + Object.entries(ips).map(([ip, n]) => `${ip} (${n}회)`).join(', ') : '최근 입장 기록이 없습니다.';
   }
+  $('btn-save-short').addEventListener('click', async () => {
+    let v = $('set-short').value.trim();
+    if (v && !/^https?:\/\//.test(v)) v = 'https://' + v;
+    const { error } = await sb.from('settings').update({ short_url: v || null }).eq('id', 1);
+    toast(error ? '저장하지 못했습니다.' : '저장했습니다.');
+  });
   $('btn-save-settings').addEventListener('click', async () => {
     const prefixes = $('set-ip').value.split(',').map((s) => s.trim()).filter(Boolean);
     if ($('set-lockdown').checked && !(await confirmBox('잠금 모드 필수', '학교 서피스 고에서 잠금 모드가 실제로 열리고, 응시 화면에 "잠금 모드에서 응시 중"이 보이는 것을 확인하셨나요? 확인하지 않고 켜면 아무도 입장하지 못할 수 있습니다.', '켜기', true))) return;

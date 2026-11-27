@@ -60,7 +60,7 @@
     <form id="f-login" class="stack">
       <div class="field"><label for="l-email">이메일</label><input id="l-email" type="email" required autocomplete="username"></div>
       <div class="field"><label for="l-pw">비밀번호</label><input id="l-pw" type="password" required autocomplete="current-password" minlength="8"></div>
-      <p id="signup-note" class="small muted hidden">처음 만든 계정 하나만 관리자가 됩니다. 가입 뒤 이메일로 온 확인 링크를 누르고 로그인하세요.</p>
+      <p id="signup-note" class="small muted hidden">가입 뒤 이메일로 온 확인 링크를 누르고 로그인하세요. 처음 계정은 바로 관리자가 되고, 그다음 계정은 기존 교사가 '설정'에서 승인해야 들어올 수 있습니다.</p>
       <div id="login-msg" class="notice hidden" role="alert"></div>
       <button class="btn primary lg block" type="submit" id="btn-login">로그인</button>
     </form>
@@ -91,6 +91,7 @@
       <div class="row">
         <div><label>회차</label><div class="sel-row" id="run-round"></div></div>
         <div style="flex:1;min-width:280px"><label>반</label><div class="sel-row" id="run-class"></div></div>
+        <button class="btn primary" type="button" id="btn-join-info" style="align-self:flex-end">학생 접속 안내 크게 보기</button>
       </div>
     </div>
     <div class="grid-2">
@@ -200,6 +201,28 @@
   <!-- 설정 -->
   <main class="wrap stack hidden" id="view-settings">
     <div class="card stack">
+      <h3>교사</h3>
+      <p class="small muted">두 번째 선생님이 가입하면 여기에 '승인 대기'로 나타납니다. 승인하면 같은 권한으로 함께 씁니다.</p>
+      <div class="table-wrap"><table>
+        <thead><tr><th>이메일</th><th>상태</th><th>맡은 반</th><th></th></tr></thead>
+        <tbody id="teacher-body"></tbody>
+      </table></div>
+      <div>
+        <label>내가 맡은 반 (수업 운영 화면에서 먼저 보입니다)</label>
+        <div class="sel-row" id="my-classes"></div>
+      </div>
+    </div>
+    <div class="card stack">
+      <h3>학생 접속 주소</h3>
+      <div class="field">
+        <label for="set-short">짧은 주소 (선택)</label>
+        <input id="set-short" type="text" placeholder="예: https://han.gl/abcd">
+        <p class="small muted" style="margin-top:6px">단축 주소 서비스에서 아래 학생용 주소를 줄여 넣으면 '학생 접속 안내' 화면에 함께 크게 보입니다. 비워 두면 QR과 원래 주소만 보입니다.</p>
+        <div class="mono small" id="student-url"></div>
+      </div>
+      <div><button class="btn primary" type="button" id="btn-save-short">저장</button></div>
+    </div>
+    <div class="card stack">
       <h3>회차</h3>
       <div id="set-rounds" class="stack"></div>
     </div>
@@ -218,6 +241,14 @@
   </main>
 </div>
 
+<div id="join" class="hidden" style="position:fixed;inset:0;z-index:70;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:24px;text-align:center">
+  <div style="font-size:2rem;font-weight:800">수행평가 접속</div>
+  <div id="join-qr" style="width:min(46vh,420px);height:min(46vh,420px)"></div>
+  <div id="join-short" style="font-size:3rem;font-weight:800;color:var(--primary);word-break:break-all"></div>
+  <div id="join-url" class="mono" style="font-size:1.3rem;color:var(--text-2);word-break:break-all"></div>
+  <div id="join-pin" style="font-size:1.6rem;font-weight:800"></div>
+  <button class="btn lg" type="button" id="btn-join-close">닫기</button>
+</div>
 <div id="modal" class="modal-back hidden"><div class="modal" id="modal-body"></div></div>
 <div id="print-area"></div>
 
