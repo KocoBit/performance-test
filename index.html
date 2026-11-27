@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>수행평가 응시</title>
+<link rel="stylesheet" href="css/style.css">
+<style>
+  body.exam { overflow: hidden; user-select: none; -webkit-user-select: none; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 1.05rem; }
+  .brand-dot { width: 12px; height: 12px; border-radius: 4px; background: var(--primary); }
+  .center-screen { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px 16px; }
+  .rule-list { margin: 0; padding-left: 1.2em; }
+  .rule-list li + li { margin-top: 6px; }
+
+  /* 시험 화면 */
+  .exam-shell { height: 100vh; display: grid; grid-template-rows: auto 1fr auto; }
+  .exam-top { display: flex; align-items: center; gap: 16px; padding: 12px 24px; background: var(--surface); border-bottom: 1px solid var(--line); }
+  .timer { font-variant-numeric: tabular-nums; font-weight: 800; font-size: 1.35rem; padding: 4px 14px; border-radius: 10px; background: var(--surface-2); }
+  .timer.low { background: var(--bad-soft); color: var(--bad); }
+  .save-state { font-size: .85rem; color: var(--text-2); min-width: 64px; text-align: right; }
+  .exam-main { display: grid; grid-template-columns: 1fr 260px; gap: 20px; padding: 20px 24px; min-height: 0; }
+  .q-card { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 28px 32px; overflow: auto; }
+  .q-no { color: var(--primary); font-weight: 800; margin-bottom: 8px; }
+  .q-stem { font-size: 1.3rem; font-weight: 700; line-height: 1.5; margin-bottom: 22px; }
+  .opts { display: grid; gap: 12px; }
+  .opt { display: flex; gap: 14px; align-items: flex-start; text-align: left; width: 100%; font: inherit; font-size: 1.12rem;
+         background: #fff; border: 2px solid var(--line); border-radius: 14px; padding: 16px 18px; cursor: pointer; min-height: 64px; color: var(--text); }
+  .opt:hover { border-color: #b9c6dd; }
+  .opt .mark { flex: none; width: 34px; height: 34px; border-radius: 50%; border: 2px solid #b9c3d0; display: flex; align-items: center; justify-content: center; font-weight: 800; color: var(--text-2); }
+  .opt.sel { border-color: var(--primary); background: var(--primary-soft); }
+  .opt.sel .mark { background: var(--primary); border-color: var(--primary); color: #fff; }
+  .side { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 18px; overflow: auto; }
+  .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .grid button { font: inherit; font-weight: 700; height: 48px; border-radius: 10px; border: 2px solid var(--line); background: #fff; cursor: pointer; color: var(--text); }
+  .grid button.done { background: var(--primary-soft); border-color: #b8c9f3; color: var(--primary); }
+  .grid button.cur { border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary) inset; }
+  .exam-bottom { display: flex; gap: 12px; padding: 12px 24px; background: var(--surface); border-top: 1px solid var(--line); }
+
+  /* 워터마크: 학번 */
+  .watermark { position: fixed; inset: 0; pointer-events: none; z-index: 40; opacity: .035; overflow: hidden;
+               font-weight: 800; font-size: 26px; color: #000; line-height: 120px; white-space: pre; transform: rotate(-18deg) scale(1.4); }
+
+  /* 화면 이탈 가림막 */
+  .cover { position: fixed; inset: 0; z-index: 60; background: #0f172a; color: #fff; display: flex; align-items: center; justify-content: center; text-align: center; padding: 24px; }
+  .cover .btn { margin-top: 18px; }
+
+  /* 결과 */
+  .score-big { font-size: 3rem; font-weight: 800; line-height: 1; }
+  .review-item { border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+  .review-item.wrong { border-color: #efc4c4; background: #fff8f8; }
+  .review-opt { padding: 4px 8px; border-radius: 8px; }
+  .review-opt.answer { background: var(--good-soft); color: #0f5534; font-weight: 700; }
+  .review-opt.mine-wrong { background: var(--bad-soft); color: #8a1f1f; font-weight: 700; }
+
+  @media (max-width: 860px) {
+    .exam-main { grid-template-columns: 1fr; }
+    .side { display: none; }
+    .q-card { padding: 20px; }
+  }
+  @media print { body * { display: none !important; } }
+</style>
+</head>
+<body>
+<noscript>이 페이지는 자바스크립트가 필요합니다.</noscript>
+
+<!-- 1. 입장 -->
+<section id="scr-enter" class="center-screen hidden">
+  <div class="card narrow" style="width:100%">
+    <div class="brand" style="margin-bottom:18px"><span class="brand-dot"></span>수행평가</div>
+    <div class="tabs" role="tablist" style="margin-bottom:20px">
+      <button type="button" class="on" data-tab="exam">시험 보기</button>
+      <button type="button" data-tab="result">결과 확인</button>
+    </div>
+
+    <form id="f-enter" class="stack" autocomplete="off">
+      <div id="lock-banner" class="notice warn hidden">
+        <strong>잠금 모드가 아닙니다.</strong> 아래 버튼으로 시험 전용 화면(테스트 응시)을 열어 주세요.
+        <div style="margin-top:10px"><a id="lock-link" class="btn primary block" href="#">잠금 모드로 열기</a></div>
+        <div class="small" style="margin-top:8px">버튼이 작동하지 않으면 교사의 안내를 따라 이 화면에서 바로 입장하세요.</div>
+      </div>
+      <div id="lock-ok" class="notice good hidden">잠금 모드에서 응시 중입니다.</div>
+      <div class="field">
+        <label>회차</label>
+        <div class="tabs" id="round-pick">
+          <button type="button" class="on" data-round="1">1회</button>
+          <button type="button" data-round="2">2회</button>
+        </div>
+      </div>
+      <div class="field">
+        <label for="in-sno">학번 (5자리)</label>
+        <input id="in-sno" class="big-input" type="tel" inputmode="numeric" maxlength="5" placeholder="20315" required>
+      </div>
+      <div class="field">
+        <label for="in-code">개인 코드 (6자리)</label>
+        <input id="in-code" class="big-input" type="tel" inputmode="numeric" maxlength="6" placeholder="••••••" required>
+      </div>
+      <div class="field">
+        <label for="in-pin">입장 암호 (칠판의 4자리)</label>
+        <input id="in-pin" class="big-input" type="tel" inputmode="numeric" maxlength="4" placeholder="0000" required>
+      </div>
+      <div id="enter-msg" class="notice bad hidden" role="alert"></div>
+      <button class="btn primary lg block" type="submit">입장하기</button>
+    </form>
+
+    <form id="f-result" class="stack hidden" autocomplete="off">
+      <div class="field">
+        <label for="r-sno">학번 (5자리)</label>
+        <input id="r-sno" class="big-input" type="tel" inputmode="numeric" maxlength="5" required>
+      </div>
+      <div class="field">
+        <label for="r-code">개인 코드 (6자리)</label>
+        <input id="r-code" class="big-input" type="tel" inputmode="numeric" maxlength="6" required>
+      </div>
+      <div id="result-msg" class="notice bad hidden" role="alert"></div>
+      <button class="btn primary lg block" type="submit">결과 보기</button>
+    </form>
+  </div>
+</section>
+
+<!-- 2. 시작 안내 -->
+<section id="scr-guide" class="center-screen hidden">
+  <div class="card narrow stack" style="width:100%">
+    <div class="brand"><span class="brand-dot"></span><span id="g-title">수행평가</span></div>
+    <h1 id="g-sno">학번</h1>
+    <ul class="rule-list">
+      <li><strong id="g-count">20</strong>문항, 제한 시간 <strong id="g-min">20</strong>분입니다. <strong>시작</strong>을 누르면 시간이 흐릅니다.</li>
+      <li>답은 고를 때마다 자동으로 저장됩니다.</li>
+      <li>시험 중 다른 화면으로 나가거나 전체 화면을 벗어나면 <strong>기록되고 교사 화면에 표시</strong>됩니다.</li>
+      <li>복사·붙여넣기·인쇄·우클릭은 막혀 있으며, 시도하면 기록됩니다.</li>
+      <li>시간이 끝나면 그때까지 고른 답으로 자동 제출됩니다.</li>
+    </ul>
+    <div id="guide-msg" class="notice bad hidden" role="alert"></div>
+    <button id="btn-start" class="btn primary lg block" type="button">시작</button>
+  </div>
+</section>
+
+<!-- 3. 시험 -->
+<section id="scr-exam" class="exam-shell hidden">
+  <header class="exam-top">
+    <div class="brand"><span class="brand-dot"></span><span id="e-title"></span></div>
+    <span class="badge" id="e-sno"></span>
+    <div class="spacer"></div>
+    <span class="save-state" id="e-save"></span>
+    <span class="muted small" id="e-progress"></span>
+    <span class="timer" id="e-timer" aria-live="off">--:--</span>
+  </header>
+  <main class="exam-main">
+    <article class="q-card">
+      <div class="q-no" id="e-qno"></div>
+      <div class="q-stem" id="e-stem"></div>
+      <div class="opts" id="e-opts"></div>
+    </article>
+    <aside class="side">
+      <h3>문항 번호</h3>
+      <div class="grid" id="e-grid"></div>
+      <p class="small muted" style="margin-top:12px">파란 번호는 답을 고른 문항입니다.</p>
+    </aside>
+  </main>
+  <footer class="exam-bottom">
+    <button id="btn-prev" class="btn lg" type="button">← 이전</button>
+    <button id="btn-next" class="btn lg" type="button">다음 →</button>
+    <div class="spacer"></div>
+    <button id="btn-submit" class="btn primary lg" type="button">제출하기</button>
+  </footer>
+  <div class="watermark" id="watermark" aria-hidden="true"></div>
+</section>
+
+<!-- 4. 제출 완료 -->
+<section id="scr-done" class="center-screen hidden">
+  <div class="card narrow stack" style="width:100%;text-align:center">
+    <div style="font-size:3rem">✔</div>
+    <h1>제출 완료</h1>
+    <p id="done-msg" class="muted">답안이 제출되었습니다. 점수는 시험이 마감된 뒤 '결과 확인'에서 볼 수 있습니다.</p>
+    <p class="small muted"><span id="done-count">10</span>초 뒤 첫 화면으로 돌아갑니다.</p>
+    <button id="btn-home" class="btn block" type="button">첫 화면으로</button>
+  </div>
+</section>
+
+<!-- 5. 결과 -->
+<section id="scr-result" class="hidden">
+  <div class="wrap stack" style="max-width:860px">
+    <div class="row"><div class="brand"><span class="brand-dot"></span>결과 확인</div><div class="spacer"></div>
+      <span class="badge" id="res-sno"></span><button id="btn-res-back" class="btn sm" type="button">나가기</button></div>
+    <div id="res-body" class="stack"></div>
+  </div>
+</section>
+
+<!-- 화면 이탈 가림막 -->
+<div id="cover" class="cover hidden">
+  <div>
+    <h2>시험 화면을 벗어났습니다</h2>
+    <p>이 기록은 교사 화면에 표시됩니다.<br>아래 버튼을 눌러 시험으로 돌아가세요.</p>
+    <button id="btn-back" class="btn primary lg" type="button">시험으로 돌아가기</button>
+  </div>
+</div>
+
+<div id="modal" class="modal-back hidden"><div class="modal" id="modal-body"></div></div>
+
+<script src="config.js"></script>
+<script src="vendor/supabase.js"></script>
+<script src="js/student.js"></script>
+</body>
+</html>

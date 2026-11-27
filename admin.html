@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>수행평가 관리</title>
+<link rel="stylesheet" href="css/style.css">
+<style>
+  .topbar { background: var(--surface); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 20; }
+  .topbar .wrap { padding-top: 10px; padding-bottom: 10px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; }
+  .brand-dot { width: 12px; height: 12px; border-radius: 4px; background: var(--primary); }
+  nav.main { display: flex; gap: 4px; flex-wrap: wrap; }
+  nav.main button { font: inherit; font-weight: 700; border: 0; background: transparent; padding: 8px 14px; border-radius: 9px; cursor: pointer; color: var(--text-2); }
+  nav.main button.on { background: var(--primary-soft); color: var(--primary); }
+  .pin-box { font-size: 4.2rem; font-weight: 800; letter-spacing: .25em; font-variant-numeric: tabular-nums; line-height: 1; color: var(--primary); }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; }
+  .kpi { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+  .kpi .v { font-size: 1.6rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .kpi .k { font-size: .85rem; color: var(--text-2); }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .sel-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .sel-row button { font: inherit; font-weight: 700; min-width: 52px; height: 44px; border-radius: 10px; border: 1px solid var(--line); background: #fff; cursor: pointer; }
+  .sel-row button.on { background: var(--primary); color: #fff; border-color: var(--primary); }
+  .sel-row button .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--good); margin-left: 6px; vertical-align: middle; }
+  details summary { cursor: pointer; font-weight: 700; }
+  .qr { width: 150px; height: 150px; }
+  .qr svg, .qr img { width: 100%; height: 100%; }
+  .mono { font-family: ui-monospace, Consolas, monospace; font-size: .9rem; word-break: break-all; }
+  .group-input { width: 70px !important; padding: 6px 8px !important; }
+  .opt-list { margin: 0; padding-left: 0; list-style: none; font-size: .88rem; }
+  .opt-list li.ans { color: var(--good); font-weight: 700; }
+  @media (max-width: 800px) { .grid-2 { grid-template-columns: 1fr; } }
+
+  /* 코드표 인쇄 */
+  #print-area { display: none; }
+  @media print {
+    body > *:not(#print-area) { display: none !important; }
+    #print-area { display: block; }
+    .print-page { page-break-after: always; }
+    .print-page h2 { margin: 0 0 6mm; font-size: 14pt; }
+    .slips { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; }
+    .slip { border: 1px dashed #888; padding: 4mm 5mm; height: 36mm; font-size: 11pt; break-inside: avoid; }
+    .slip .sn { font-size: 15pt; font-weight: 800; }
+    .slip .cd { font-size: 20pt; font-weight: 800; letter-spacing: 2pt; font-family: Consolas, monospace; }
+    .slip .hint { font-size: 8.5pt; color: #444; }
+  }
+</style>
+</head>
+<body>
+
+<!-- 로그인 -->
+<section id="scr-login" class="hidden" style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px 16px">
+  <div class="card narrow stack" style="width:100%">
+    <div class="brand"><span class="brand-dot"></span>수행평가 관리</div>
+    <div class="tabs">
+      <button type="button" class="on" data-auth="login">로그인</button>
+      <button type="button" data-auth="signup">처음 사용(계정 만들기)</button>
+    </div>
+    <form id="f-login" class="stack">
+      <div class="field"><label for="l-email">이메일</label><input id="l-email" type="email" required autocomplete="username"></div>
+      <div class="field"><label for="l-pw">비밀번호</label><input id="l-pw" type="password" required autocomplete="current-password" minlength="8"></div>
+      <p id="signup-note" class="small muted hidden">처음 만든 계정 하나만 관리자가 됩니다. 가입 뒤 이메일로 온 확인 링크를 누르고 로그인하세요.</p>
+      <div id="login-msg" class="notice hidden" role="alert"></div>
+      <button class="btn primary lg block" type="submit" id="btn-login">로그인</button>
+    </form>
+  </div>
+</section>
+
+<!-- 관리 화면 -->
+<div id="app" class="hidden">
+  <header class="topbar">
+    <div class="wrap row">
+      <div class="brand"><span class="brand-dot"></span>수행평가 관리</div>
+      <nav class="main" id="nav">
+        <button type="button" data-view="run" class="on">수업 운영</button>
+        <button type="button" data-view="results">결과</button>
+        <button type="button" data-view="bank">문제은행</button>
+        <button type="button" data-view="students">학생·코드</button>
+        <button type="button" data-view="settings">설정</button>
+      </nav>
+      <div class="spacer"></div>
+      <span class="small muted" id="who"></span>
+      <button class="btn sm" id="btn-logout" type="button">로그아웃</button>
+    </div>
+  </header>
+
+  <!-- 수업 운영 -->
+  <main class="wrap stack" id="view-run">
+    <div class="card stack">
+      <div class="row">
+        <div><label>회차</label><div class="sel-row" id="run-round"></div></div>
+        <div style="flex:1;min-width:280px"><label>반</label><div class="sel-row" id="run-class"></div></div>
+      </div>
+    </div>
+    <div class="grid-2">
+      <div class="card stack" id="session-card"></div>
+      <div class="card stack">
+        <h3>잠금 모드(테스트 응시) 링크</h3>
+        <p class="small muted">학생은 응시 화면의 '잠금 모드로 열기' 버튼을 누르면 됩니다. 버튼이 안 되면 이 QR이나 주소로 여세요.</p>
+        <div class="row" style="align-items:flex-start">
+          <div class="qr" id="qr"></div>
+          <div style="flex:1;min-width:180px" class="stack">
+            <div class="mono" id="lock-url"></div>
+            <button class="btn sm" type="button" id="btn-copy-lock">주소 복사</button>
+            <div class="small muted">일반 응시 주소: <span class="mono" id="plain-url"></span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="kpis" id="run-kpis"></div>
+    <div class="row">
+      <h3 style="margin:0">실시간 감독</h3><span class="small muted" id="run-updated"></span>
+      <div class="spacer"></div>
+      <label class="small" style="margin:0;font-weight:400"><input type="checkbox" id="run-hide-none"> 미응시·대상 아님 숨기기</label>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>학번</th><th>상태</th><th class="num">답한 수</th><th class="num">남은 시간</th><th class="num">화면 이탈</th><th class="num">차단 시도</th><th>잠금 모드</th><th>접속</th><th>조치</th></tr></thead>
+        <tbody id="run-body"></tbody>
+      </table>
+    </div>
+    <p class="small muted">빨간 줄은 지금 시험 화면을 벗어난 학생입니다. 이탈·차단 기록은 알림 창이나 실수로도 생길 수 있으니 감점 전에 직접 확인하세요.</p>
+  </main>
+
+  <!-- 결과 -->
+  <main class="wrap stack hidden" id="view-results">
+    <div class="card row">
+      <div><label>회차</label><div class="sel-row" id="res-round"></div></div>
+      <div style="min-width:140px"><label for="res-class">반</label><select id="res-class"></select></div>
+      <div style="min-width:160px"><label for="res-status">상태</label><select id="res-status">
+        <option value="">전체</option><option value="submitted">제출</option><option value="none">미응시(3차시 대상)</option><option value="flag">이탈·차단 기록 있음</option>
+      </select></div>
+      <div class="spacer"></div>
+      <button class="btn" type="button" id="btn-xlsx">엑셀 내려받기</button>
+    </div>
+    <div class="kpis" id="res-kpis"></div>
+    <div class="card stack" id="review-card"></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>학번</th><th>상태</th><th class="num">정답 수</th><th class="num">점수</th><th>제출 시각</th><th class="num">이탈</th><th class="num">이탈 시간</th><th class="num">차단 시도</th><th class="num">복귀 직후 답</th><th>잠금</th><th>시간 조정</th><th></th></tr></thead>
+        <tbody id="res-body"></tbody>
+      </table>
+    </div>
+    <p class="small muted">'복귀 직후 답'은 화면 이탈에서 돌아온 뒤 20초 안에 답을 고른 횟수입니다. 의심이 가는 경우 '상세'에서 시간 순서를 확인하세요.</p>
+    <details class="card">
+      <summary>문항별 정답률</summary>
+      <div class="table-wrap" style="margin-top:12px"><table>
+        <thead><tr><th class="num">번호</th><th class="num">단원</th><th>발문</th><th class="num">출제 횟수</th><th class="num">정답률</th></tr></thead>
+        <tbody id="stat-body"></tbody>
+      </table></div>
+    </details>
+    <details class="card">
+      <summary>응시 기록 삭제(학기 정리)</summary>
+      <p class="small muted" style="margin-top:10px">이 회차의 응시·점수·이탈 기록과 반별 운영 상태를 모두 지웁니다. 먼저 엑셀로 내려받아 보관하세요. 문제은행과 학생 코드는 남습니다.</p>
+      <button class="btn danger" type="button" id="btn-delete-records">이 회차 응시 기록 모두 삭제</button>
+    </details>
+  </main>
+
+  <!-- 문제은행 -->
+  <main class="wrap stack hidden" id="view-bank">
+    <div class="card row">
+      <div><label>회차</label><div class="sel-row" id="bank-round"></div></div>
+      <div class="spacer"></div>
+      <label class="btn" style="margin:0">문항 파일(docx) 올리기<input type="file" id="bank-file" accept=".docx" class="hidden"></label>
+    </div>
+    <div id="bank-preview"></div>
+    <div class="kpis" id="bank-kpis"></div>
+    <p class="small muted">'금지 묶음'에 같은 이름(예: g1)을 넣은 문항끼리는 한 학생의 시험지에 하나만 나옵니다. 문항 내용은 원문 그대로이며 여기서 고치지 않습니다.</p>
+    <div class="table-wrap"><table>
+      <thead><tr><th class="num">번호</th><th>단원</th><th>발문 · 보기(초록이 정답)</th><th>쪽</th><th>금지 묶음</th></tr></thead>
+      <tbody id="bank-body"></tbody>
+    </table></div>
+  </main>
+
+  <!-- 학생·코드 -->
+  <main class="wrap stack hidden" id="view-students">
+    <div class="card stack">
+      <h3>코드 발급</h3>
+      <p class="small muted">학번은 다섯 자리(학년 1 + 반 2 + 번호 2)입니다. 반마다 1번부터 최대 번호까지 모두 만들고, 빈 번호(자퇴·전학 등)는 '대상 아님'으로 표시하세요. 이미 있는 학번의 코드는 바뀌지 않습니다.</p>
+      <div class="row">
+        <div style="width:110px"><label for="iss-grade">학년</label><input id="iss-grade" type="number" min="1" max="9" value="2"></div>
+        <div style="width:110px"><label for="iss-classes">반 수</label><input id="iss-classes" type="number" min="1" max="30" value="8"></div>
+        <div style="width:130px"><label for="iss-max">최대 번호</label><input id="iss-max" type="number" min="1" max="60" value="22"></div>
+        <div style="align-self:flex-end"><button class="btn primary" type="button" id="btn-issue">코드 만들기</button></div>
+      </div>
+    </div>
+    <div class="card row">
+      <div style="min-width:160px"><label for="stu-class">반</label><select id="stu-class"></select></div>
+      <div class="spacer"></div>
+      <button class="btn" type="button" id="btn-print">이 반 코드표 인쇄</button>
+      <button class="btn" type="button" id="btn-print-all">전체 코드표 인쇄</button>
+    </div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>학번</th><th>개인 코드</th><th>응시 대상</th><th>상태</th><th></th></tr></thead>
+      <tbody id="stu-body"></tbody>
+    </table></div>
+  </main>
+
+  <!-- 설정 -->
+  <main class="wrap stack hidden" id="view-settings">
+    <div class="card stack">
+      <h3>회차</h3>
+      <div id="set-rounds" class="stack"></div>
+    </div>
+    <div class="card stack">
+      <h3>부정행위 방지</h3>
+      <label style="font-weight:400"><input type="checkbox" id="set-lockdown"> <strong>잠금 모드 필수</strong> — 테스트 응시 앱으로 열지 않으면 입장을 막습니다.</label>
+      <p class="small muted">학교 서피스 고에서 잠금 모드가 실제로 열리는지 먼저 확인한 뒤 켜세요. 켠 뒤 잠금 모드가 감지되지 않으면 아무도 입장하지 못합니다.</p>
+      <div class="field">
+        <label for="set-ip">학교 네트워크에서만 입장 (인터넷 주소 앞부분, 쉼표로 구분)</label>
+        <input id="set-ip" type="text" placeholder="예: 211.234.">
+        <p class="small muted" style="margin-top:6px">비워 두면 제한하지 않습니다. 학교 인터넷 주소는 정보 담당 선생님께 확인하세요. 아래 '최근 입장 주소'에서 실제 학교 주소를 확인할 수도 있습니다.</p>
+        <div class="small" id="recent-ips"></div>
+      </div>
+      <div><button class="btn primary" type="button" id="btn-save-settings">저장</button></div>
+    </div>
+  </main>
+</div>
+
+<div id="modal" class="modal-back hidden"><div class="modal" id="modal-body"></div></div>
+<div id="print-area"></div>
+
+<script src="config.js"></script>
+<script src="vendor/supabase.js"></script>
+<script src="vendor/jszip.min.js"></script>
+<script src="vendor/xlsx.mini.min.js"></script>
+<script src="vendor/qrcode.js"></script>
+<script src="js/docx-parse.js"></script>
+<script src="js/admin.js"></script>
+</body>
+</html>
