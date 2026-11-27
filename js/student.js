@@ -201,7 +201,7 @@
     let mode, rowH;
     if (narrow) { mode = 'compact'; }
     else if (avail / n >= MIN_ROW) { mode = 'c1'; rowH = Math.min(54, Math.floor(avail / n)); }
-    else if (avail / Math.ceil(n / 2) >= MIN_ROW - 4 && window.innerWidth >= 900) { mode = 'c2'; rowH = Math.min(54, Math.floor(avail / Math.ceil(n / 2))); }
+    else if (avail / Math.ceil(n / 2) >= MIN_ROW - 4 && window.innerWidth >= 1000) { mode = 'c2'; rowH = Math.min(54, Math.floor(avail / Math.ceil(n / 2))); }
     else { mode = 'compact'; }
     omr.className = 'omr ' + mode;
     if (rowH) {
@@ -218,8 +218,19 @@
   function buildGrid() {
     loadFlags();
     const body = $('omr-body'); body.innerHTML = '';
+    let unitIdx = -1;
     items.forEach((it, i) => {
-      const row = document.createElement('div'); row.className = 'omr-row';
+      const first = i === 0 || items[i - 1].unit_no !== it.unit_no;
+      if (first) {
+        unitIdx++;
+        const sec = document.createElement('div'); sec.className = 'omr-sec';
+        sec.textContent = it.unit_no ? `학습 ${it.unit_no}` : '';
+        body.appendChild(sec);
+      }
+      const row = document.createElement('div'); row.className = 'omr-row' + (unitIdx % 2 ? ' ualt' : '');
+      const lab = document.createElement('span'); lab.className = 'omr-unit';
+      lab.textContent = first && it.unit_no ? `학습${it.unit_no}` : '';
+      row.appendChild(lab);
       const no = document.createElement('button'); no.type = 'button'; no.className = 'omr-no';
       no.setAttribute('aria-label', `${i + 1}번 문제로 가기`);
       no.addEventListener('click', () => go(i));
@@ -238,6 +249,8 @@
   function render() {
     const it = items[cur];
     $('e-qno').textContent = `${cur + 1}번 / ${items.length}문항`;
+    $('e-unit').textContent = it.unit_no ? `학습 ${it.unit_no}${it.unit_title ? ' · ' + it.unit_title : ''}` : '';
+    $('e-unit').classList.toggle('hidden', !it.unit_no);
     $('e-stem').textContent = it.stem;
     const f = flags.has(cur);
     $('btn-flag').classList.toggle('on', f);
@@ -252,10 +265,10 @@
       b.addEventListener('click', () => choose(i));
       box.appendChild(b);
     });
-    [...$('omr-body').children].forEach((row, i) => {
+    [...$('omr-body').querySelectorAll('.omr-row')].forEach((row, i) => {
       row.classList.toggle('cur', i === cur);
       row.classList.toggle('done', answered(i));
-      const no = row.firstChild;
+      const no = row.querySelector('.omr-no');
       no.innerHTML = '';
       no.append(String(i + 1));
       if (flags.has(i)) { const fl = document.createElement('span'); fl.className = 'fl'; fl.textContent = '⚑'; no.append(fl); }

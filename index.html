@@ -31,6 +31,7 @@
   .q-card { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 24px 30px; overflow: auto; min-height: 0; }
   .q-head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
   .q-no { color: var(--primary); font-weight: 800; font-size: calc(1.05rem * var(--qs)); }
+  .unit-tag { font-size: .9rem; font-weight: 700; color: #3b4a5f; background: var(--surface-2); border: 1px solid var(--line); border-radius: 999px; padding: 5px 12px; }
   .flag-btn { font: inherit; font-size: .9rem; font-weight: 700; border: 1px solid var(--line); background: #fff; border-radius: 999px; padding: 6px 14px; cursor: pointer; color: var(--text-2); min-height: 36px; }
   .flag-btn.on { background: var(--warn-soft); border-color: #f0c98a; color: var(--warn); }
   .q-stem { font-size: calc(1.3rem * var(--qs)); font-weight: 700; line-height: 1.55; margin-bottom: 20px; }
@@ -50,6 +51,9 @@
   .omr.c2 .omr-body { grid-template-columns: auto auto; grid-template-rows: repeat(10, auto); grid-auto-flow: column; }
   .omr-row { display: flex; align-items: center; gap: 4px; border-radius: 10px; padding: 0 4px; height: var(--row-h, 44px); }
   .omr-row.cur { background: var(--primary-soft); }
+  .omr-row.ualt:not(.cur) { background: #f6f8fb; }
+  .omr-unit { width: 40px; flex: none; font-size: .72rem; font-weight: 800; color: var(--primary); text-align: center; line-height: 1.1; }
+  .omr-sec { display: none; }
   .omr-no { font: inherit; font-weight: 800; width: 44px; height: calc(var(--row-h, 44px) - 4px); border: 0; background: transparent; cursor: pointer; color: var(--text); display: flex; align-items: center; justify-content: center; gap: 2px; border-radius: 8px; }
   .omr-no .fl { color: var(--warn); font-size: .8rem; }
   .bub { font: inherit; font-weight: 700; width: var(--bub, 38px); height: var(--bub, 38px); border-radius: 50%; border: 2px solid #b9c3d0; background: #fff; cursor: pointer; color: var(--text-2); padding: 0; font-size: .95rem; }
@@ -61,6 +65,8 @@
   .omr.compact .omr-row.done .omr-no { background: var(--primary-soft); border-color: #b8c9f3; color: var(--primary); }
   .omr.compact .omr-row.cur .omr-no { border-color: var(--primary); }
   .omr.compact .omr-legend { display: none; }
+  .omr.compact .omr-unit { display: none; }
+  .omr.compact .omr-sec { display: block; grid-column: 1 / -1; font-size: .8rem; font-weight: 800; color: var(--primary); margin-top: 4px; }
   .omr-legend { font-size: .78rem; color: var(--text-2); margin: 8px 4px 0; }
   .exam-bottom { display: flex; gap: 10px; padding: 10px 20px; background: var(--surface); border-top: 1px solid var(--line); flex-wrap: wrap; }
 
@@ -188,6 +194,7 @@
     <article class="q-card" id="q-card">
       <div class="q-head">
         <div class="q-no" id="e-qno"></div>
+        <span class="unit-tag" id="e-unit"></span>
         <button type="button" class="flag-btn" id="btn-flag">☆ 다시 볼 문제로 표시</button>
       </div>
       <div class="q-stem" id="e-stem"></div>
@@ -196,7 +203,7 @@
     <aside class="omr c1" id="omr">
       <h3>답안 표기란</h3>
       <div class="omr-body" id="omr-body"></div>
-      <div class="omr-legend" id="omr-legend">번호를 누르면 그 문제로 갑니다. ⚑는 다시 볼 문제입니다.</div>
+      <div class="omr-legend" id="omr-legend">번호를 누르면 그 문제로 갑니다. ⚑는 다시 볼 문제입니다. 문제는 학습 순서대로 나옵니다.</div>
     </aside>
   </main>
   <footer class="exam-bottom">
