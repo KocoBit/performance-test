@@ -165,15 +165,20 @@
     <div class="brand"><span class="brand-dot"></span><span id="g-title">수행평가</span></div>
     <h1 id="g-sno">학번</h1>
     <ul class="rule-list">
-      <li><strong id="g-count">20</strong>문항, 제한 시간 <strong id="g-min">20</strong>분입니다. <strong>시작</strong>을 누르면 시간이 흐릅니다.</li>
+      <li><strong id="g-count">20</strong>문항, 제한 시간 <strong id="g-min">20</strong>분입니다. <strong>교사가 시험을 시작하면 반 전체가 동시에</strong> 시작하고 동시에 끝납니다.</li>
       <li>답은 고를 때마다 자동으로 저장됩니다.</li>
       <li>시험은 <strong>전체 화면</strong>으로 진행되며, Alt+Tab·윈도우 키는 막힙니다.</li>
       <li>다른 창으로 나가거나 전체 화면을 벗어나면 <strong>문제가 가려지고, 기록되어 교사 화면에 바로 표시</strong>됩니다.</li>
       <li>복사·붙여넣기·인쇄·우클릭은 막혀 있으며, 시도하면 기록됩니다.</li>
       <li>시간이 끝나면 그때까지 고른 답으로 자동 제출됩니다.</li>
     </ul>
+    <div id="wait-box" class="notice hidden" style="text-align:center;padding:22px">
+      <div style="font-size:1.4rem;font-weight:800;margin-bottom:6px" id="wait-title">준비 완료</div>
+      <div id="wait-text">교사가 시험을 시작하면 자동으로 문제가 나옵니다. 화면을 그대로 두고 기다리세요.</div>
+    </div>
+    <div id="late-box" class="notice warn hidden"></div>
     <div id="guide-msg" class="notice bad hidden" role="alert"></div>
-    <button id="btn-start" class="btn primary lg block" type="button">시작</button>
+    <button id="btn-start" class="btn primary lg block" type="button">준비 완료 (전체 화면으로 대기)</button>
   </div>
 </section>
 

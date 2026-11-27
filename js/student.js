@@ -8,6 +8,7 @@
   const ERRORS = {
     BAD_CREDENTIALS: '학번 또는 개인 코드가 맞지 않습니다.',
     BAD_PIN: '입장 암호가 맞지 않습니다. 칠판의 4자리를 확인하세요.',
+    WAITING: '아직 시험이 시작되지 않았습니다. 교사가 시작할 때까지 기다리세요.',
     LOCKED: '여러 번 틀려 잠시 잠겼습니다. 잠시 뒤 다시 시도하거나 교사에게 알려 주세요.',
     NOT_OPEN: '지금 우리 반에 열린 회차가 아닙니다. 회차를 확인하거나 교사에게 문의하세요.',
     ALREADY_SUBMITTED: '이미 제출한 회차입니다.',
@@ -107,15 +108,60 @@
     else showGuide();
   });
 
-  function showGuide() {
+  // ---------- 대기: 교사가 '시험 시작'을 누를 때까지 ----------
+  let waitTimer = null, waiting = false, startedState = false;
+  const mmssTxt = (sec) => `${String(Math.floor(sec / 60)).padStart(2, '0')}:${String(sec % 60).padStart(2, '0')}`;
+  async function showGuide() {
     $('g-title').textContent = session.title;
     $('g-sno').textContent = session.sno;
     $('g-count').textContent = session.count;
     $('g-min').textContent = session.minutes;
     showMsg($('guide-msg'), '');
+    $('wait-box').classList.add('hidden'); $('late-box').classList.add('hidden');
+    $('btn-start').classList.remove('hidden'); $('btn-start').disabled = false;
     show('scr-guide');
+    const w = await rpc('student_wait', { p_token: session.token });
+    if (w && w.ok && w.started) {
+      // 이미 시작된 뒤에 들어온 학생: 남은 시간만
+      startedState = true;
+      $('late-box').textContent = `시험이 이미 시작되었습니다. 남은 시간 ${mmssTxt(w.remaining || 0)} — 아래 버튼을 누르면 바로 시작합니다.`;
+      $('late-box').classList.remove('hidden');
+      $('btn-start').textContent = '바로 시작';
+    } else if (w && !w.ok && w.error === 'ALREADY_SUBMITTED') {
+      finish('submitted');
+    } else {
+      startedState = false;
+      $('btn-start').textContent = '준비 완료 (전체 화면으로 대기)';
+    }
   }
-  $('btn-start').addEventListener('click', () => startExam(false));
+  $('btn-start').addEventListener('click', async () => {
+    if (startedState) { startExam(false); return; }
+    await requestFs();   // 버튼을 누른 순간이어야 전체 화면이 허용된다
+    await rpc('student_ready', { p_token: session.token });
+    $('btn-start').classList.add('hidden');
+    $('wait-box').classList.remove('hidden');
+    waiting = true;
+    clearInterval(waitTimer);
+    waitTimer = setInterval(pollWait, 2000);
+    pollWait();
+  });
+  async function pollWait() {
+    if (!waiting) return;
+    const w = await rpc('student_wait', { p_token: session.token });
+    if (!w) return;
+    if (!w.ok) {
+      if (w.error === 'ALREADY_SUBMITTED') { stopWait(); finish('submitted'); }
+      else if (w.error === 'NOT_OPEN' || w.error === 'SESSION') { stopWait(); clearSession(); show('scr-enter'); showMsg($('enter-msg'), errText(w)); }
+      return;
+    }
+    $('wait-text').textContent = document.fullscreenElement || !document.fullscreenEnabled
+      ? '교사가 시험을 시작하면 자동으로 문제가 나옵니다. 화면을 그대로 두고 기다리세요.'
+      : '전체 화면이 풀렸습니다. 아래 버튼을 눌러 다시 전체 화면으로 기다리세요.';
+    $('btn-start').classList.toggle('hidden', !!document.fullscreenElement || !document.fullscreenEnabled);
+    $('btn-start').textContent = '전체 화면으로 돌아가기';
+    if (w.started) { stopWait(); startExam(false); }
+  }
+  function stopWait() { waiting = false; clearInterval(waitTimer); }
 
   // ---------- 시험 ----------
   async function requestFs() {
@@ -133,10 +179,11 @@
   const fsOk = () => !!document.fullscreenElement || !document.fullscreenEnabled;
 
   async function startExam(resume) {
-    await requestFs();   // 시작 버튼을 누른 순간이어야 전체 화면이 허용된다
+    await requestFs();   // 버튼을 눌러 시작한 경우에만 전체 화면이 켜진다(대기 중에 이미 켜져 있으면 그대로)
     const r = await rpc('student_start', { p_token: session.token });
     if (!r || !r.ok) {
       if (r && r.error === 'ALREADY_SUBMITTED') { finish('submitted'); return; }
+      if (r && r.error === 'WAITING') { showGuide(); return; }
       if (resume) { clearSession(); show('scr-enter'); showMsg($('enter-msg'), errText(r)); }
       else showMsg($('guide-msg'), errText(r));
       return;
@@ -152,6 +199,7 @@
     render();
     show('scr-exam');
     requestAnimationFrame(() => { layoutOmr(); render(); });
+    if (!fsOk()) $('cover').classList.remove('hidden');
     if (inLockdown()) push('lockdown', null, { secure: true });
     clearInterval(tickTimer); tickTimer = setInterval(tick, 250);
     clearInterval(beatTimer); beatTimer = setInterval(heartbeat, 5000);
@@ -456,6 +504,7 @@
   }
 
   function finish(reason) {
+    stopWait();
     examActive = false;
     clearInterval(tickTimer); clearInterval(beatTimer);
     $('cover').classList.add('hidden'); $('modal').classList.add('hidden');
@@ -547,8 +596,7 @@
   try { session = JSON.parse(sessionStorage.getItem(STORE) || 'null'); } catch (e) { session = null; }
   if (session && session.token) {
     // 새로고침·꺼짐 뒤: 같은 문항·답·남은 시간으로 이어서
-    show('scr-guide'); showGuide();
-    $('btn-start').textContent = '이어서 풀기';
+    showGuide().then(() => { if (startedState) $('btn-start').textContent = '이어서 풀기'; });
   } else {
     show('scr-enter');
   }

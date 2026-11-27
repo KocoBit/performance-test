@@ -26,7 +26,7 @@
   }
   const ERR = {
     NOT_ADMIN: '관리자 권한이 없습니다.', HAS_ATTEMPTS: '이미 응시 기록이 있는 회차는 문항을 바꿀 수 없습니다. 먼저 결과 화면에서 응시 기록을 삭제하세요.',
-    REASON_REQUIRED: '사유를 적어 주세요.', ALREADY_SUBMITTED: '직접 제출한 학생은 시간을 되돌릴 수 없습니다. 재응시를 허용하세요.',
+    REASON_REQUIRED: '사유를 적어 주세요.', NOT_STARTABLE: '이미 시작했거나 열려 있지 않은 회차입니다.', ALREADY_SUBMITTED: '직접 제출한 학생은 시간을 되돌릴 수 없습니다. 재응시를 허용하세요.',
   };
   async function rpc(name, args) {
     const { data, error } = await sb.rpc(name, args || {});
@@ -147,6 +147,10 @@
     const ordered = [...state.myClasses.filter((c) => c <= state.classCount).sort((a, b) => a - b), ...classList().filter((c) => !state.myClasses.includes(c))];
     selRow($('run-class'), ordered, state.cls, (c) => (state.myClasses.includes(c) ? `${c}반 ★` : `${c}반`), (c) => { state.cls = c; initRun(); },
       (c) => (isOpen(state.round, c) ? el('span', { class: 'dot', title: '열림' }) : null));
+    const { data: cfg } = await sb.from('settings').select('use_lockdown').eq('id', 1).single();
+    const useLock = !!(cfg && cfg.use_lockdown);
+    $('lock-card').classList.toggle('hidden', !useLock);
+    $('run-grid').style.gridTemplateColumns = useLock ? '' : '1fr';
     const base = location.origin + location.pathname.replace(/admin\.html$/, '');
     const lockUrl = 'ms-edu-secureassessment:' + base + 'index.html!enforceLockdown';
     $('lock-url').textContent = lockUrl;
@@ -161,24 +165,52 @@
   }
   $('run-hide-none').addEventListener('change', () => refreshMonitor());
 
-  function renderSessionCard(sess) {
+  function renderSessionCard(sess, rows) {
     const card = $('session-card'); card.innerHTML = '';
     const title = el('h3', {}, `${roundTitle(state.round)} · ${state.cls}반`);
     state.lastPin = sess && sess.is_open ? sess.pin : null;
     if (sess && sess.is_open) {
+      const r = state.rounds.find((x) => x.round_no === state.round) || { duration_min: 20 };
+      const list = (rows || []).filter((x) => !x.excluded);
+      const entered = list.filter((x) => x.status !== 'none');
+      const ready = list.filter((x) => x.status === 'ready' && x.ready);
+      const waitingFor = list.filter((x) => x.status === 'none');
       card.append(title,
         el('div', { class: 'badge good' }, '열림 · 이 반 학생만 입장 가능'),
         el('div', { class: 'muted small' }, '입장 암호 (칠판에 적어 주세요)'),
-        el('div', { class: 'pin-box' }, sess.pin),
+        el('div', { class: 'pin-box' }, sess.pin));
+      if (!sess.started_at) {
+        card.append(
+          el('div', { class: 'kpis', style: 'grid-template-columns:repeat(3,1fr)' },
+            el('div', { class: 'kpi' }, el('div', { class: 'v' }, `${entered.length}/${list.length}`), el('div', { class: 'k' }, '입장')),
+            el('div', { class: 'kpi' }, el('div', { class: 'v' }, ready.length), el('div', { class: 'k' }, '준비 완료(대기 중)')),
+            el('div', { class: 'kpi' }, el('div', { class: 'v' }, waitingFor.length), el('div', { class: 'k' }, '미입장'))),
+          waitingFor.length ? el('div', { class: 'small' }, '미입장: ', waitingFor.map((x) => x.student_no).join(', ')) : el('div', { class: 'notice good' }, '응시 대상 전원이 입장했습니다.'),
+          el('button', { class: 'btn primary lg block', type: 'button', onclick: () => startExam(waitingFor) }, `시험 시작 (${r.duration_min}분)`),
+          el('p', { class: 'small muted' }, '누르면 입장한 학생 화면에 동시에 문제가 나타나고 반 전체 시간이 함께 흐릅니다. 늦게 들어온 학생은 남은 시간만 받습니다.'));
+      } else {
+        const st = new Date(sess.started_at), end = new Date(st.getTime() + r.duration_min * 60000);
+        const hm = (d) => d.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+        card.append(el('div', { class: 'notice good' }, `시험 진행 중 · ${hm(st)} 시작 → ${hm(end)} 종료 예정`));
+      }
+      card.append(
         el('div', { class: 'small muted' }, `연 시각 ${fmtTime(sess.opened_at)}`),
         el('button', { class: 'btn danger solid lg block', type: 'button', onclick: closeSession }, '회차 닫기 (수업 끝)'),
         el('p', { class: 'small muted' }, '닫으면 푸는 중인 답안이 자동 제출되고, 이 반 학생에게 점수가 공개됩니다.'));
     } else {
       card.append(title,
         el('div', { class: 'badge' }, sess && sess.closed_at ? `닫힘 · ${fmtTime(sess.closed_at)}` : '아직 열지 않음'),
-        el('p', { class: 'small muted' }, '수업을 시작할 때 엽니다. 열 때마다 새 입장 암호가 만들어집니다. 이미 제출한 학생은 다시 열어도 입장할 수 없어, 3차시 미응시자 시험에도 그대로 쓰면 됩니다.'),
+        el('p', { class: 'small muted' }, '수업을 시작할 때 엽니다. 학생이 입장해 준비를 마치면 \'시험 시작\'으로 다 같이 시작합니다. 이미 제출한 학생은 다시 열어도 입장할 수 없어, 3차시 미응시자 시험에도 그대로 쓰면 됩니다.'),
         el('button', { class: 'btn good lg block', type: 'button', onclick: openSession }, '회차 열기 (수업 시작)'));
     }
+  }
+  async function startExam(missing) {
+    const msg = missing.length
+      ? `아직 입장하지 않은 학생이 ${missing.length}명 있습니다 (${missing.map((x) => x.student_no).join(', ')}). 지금 시작하면 이 학생들은 들어오는 즉시 남은 시간만 받습니다. 시작할까요?`
+      : '입장한 학생 모두의 화면에 문제가 나타나고 시간이 흐르기 시작합니다. 시작할까요?';
+    if (!(await confirmBox('시험 시작', msg, '시작'))) return;
+    const r = await rpc('admin_start_exam', { p_round: state.round, p_class: state.cls });
+    if (r && r.ok) { toast('시험을 시작했습니다.'); refreshMonitor(); }
   }
   async function openSession() {
     const other = openSessions.filter((s) => s.class_no !== state.cls);
@@ -193,12 +225,12 @@
   }
 
   const STATUS = {
-    none: ['미응시', ''], ready: ['입장(시작 전)', 'primary'], in_progress: ['응시 중', 'primary'], submitted: ['제출', 'good'],
+    none: ['미입장', ''], ready: ['입장', 'primary'], in_progress: ['응시 중', 'primary'], submitted: ['제출', 'good'],
   };
   async function refreshMonitor() {
     const r = await rpc('admin_monitor', { p_round: state.round, p_class: state.cls });
     if (!r) return;
-    renderSessionCard(r.session);
+    renderSessionCard(r.session, r.students);
     const rows = r.students;
     const active = rows.filter((s) => !s.excluded);
     const k = (label, v) => el('div', { class: 'kpi' }, el('div', { class: 'v' }, v), el('div', { class: 'k' }, label));
@@ -216,6 +248,7 @@
       if (hide && (s.excluded || s.status === 'none')) return;
       let [label, cls] = STATUS[s.status] || [s.status, ''];
       if (s.excluded) { label = '대상 아님'; cls = ''; }
+      if (s.status === 'ready' && s.ready) { label = '준비 완료'; cls = 'good'; }
       if (s.status === 'in_progress' && s.away) { label = '이탈 중'; cls = 'bad'; }
       if (s.status === 'submitted' && s.submit_reason && s.submit_reason !== 'manual') label += s.submit_reason === 'timeout' ? '(시간 끝)' : '(마감)';
       const tr = el('tr', { class: s.excluded ? 'dim' : (s.status === 'in_progress' && s.away ? 'alert' : '') },
